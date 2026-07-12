@@ -1,0 +1,14 @@
+{
+    "stats":[
+        "Strength",
+        "Perception",
+        "Endurance",
+        "Charisma",
+        "Intelligence",
+        "Agility",
+        "Luck"
+    ],
+    "minimumStatValue":1,
+    "maximumStatValue":10,
+    "initialStatPoints":21
+}
