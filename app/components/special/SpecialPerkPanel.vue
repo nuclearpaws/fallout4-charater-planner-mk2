@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import AlertMessage from '~/components/ui/AlertMessage.vue'
 import InfoDialog from '~/components/ui/InfoDialog.vue'
 import SpecialChartCell from '~/components/special/SpecialChartCell.vue'
 import { specialStatDescriptions, stats, type Perk, type Stat } from '~/data/catalog'
@@ -60,7 +59,6 @@ function openStatInfo(stat: Stat) { infoStat.value = stat }
 <template>
   <section class="tab-panel perks-panel">
     <div class="panel-heading"><div><h2>Perks</h2><p>Choose perk ranks, bobbleheads, and the You're SPECIAL book.</p></div></div>
-    <AlertMessage v-if="pointsLeft !== 0" type="error">Starting SPECIAL stats are not allocated.</AlertMessage>
     <p v-if="selectionStatus" class="selection-status">{{ selectionStatus }}</p>
     <section class="perks-card">
       <div class="perks-card-header">

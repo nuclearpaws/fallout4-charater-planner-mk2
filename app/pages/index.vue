@@ -6,6 +6,8 @@ import BuildSaveRail from '~/components/planner/BuildSaveRail.vue'
 import ConfirmBuildActionDialog from '~/components/planner/ConfirmBuildActionDialog.vue'
 import PlannerTabs from '~/components/planner/PlannerTabs.vue'
 import SpecialPerkPanel from '~/components/special/SpecialPerkPanel.vue'
+import PlayerStatsPanel from '~/components/stats/PlayerStatsPanel.vue'
+import AlertMessage from '~/components/ui/AlertMessage.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useBuildExport } from '~/composables/useBuildExport'
 import { useSavedBuilds } from '~/composables/useSavedBuilds'
@@ -24,7 +26,7 @@ const dragOverId = ref<string | null>(null)
 const dragOverEnd = ref(false)
 const selectionStatus = ref('')
 const expandedPerkId = ref<string | null>(null)
-const activeTab = ref<'character' | 'perks' | 'plan' | 'console'>('character')
+const activeTab = ref<'character' | 'perks' | 'plan' | 'stats' | 'console'>('character')
 const dlcLoadOrder = ref(Object.fromEntries(dlcs.map((dlc) => [dlc.name, dlc.id])) as Record<string, string>)
 const pendingAction = ref<PendingAction | null>(null)
 const confirmationKind = ref<'unsaved' | 'delete' | null>(null)
@@ -242,10 +244,7 @@ function requestAction(action: PendingAction) {
 function performAction(action: PendingAction) {
   if (action.type === 'load') {
     const saved = savedBuilds.value.find((item) => item.id === action.id)
-    if (saved) {
-      loadBuild(saved)
-      activeTab.value = Object.keys(saved.build.selectedRanks).length ? 'plan' : 'perks'
-    }
+    if (saved) loadBuild(saved)
   }
   if (action.type === 'new') {
     startNewBuild()
@@ -322,6 +321,12 @@ onBeforeUnmount(() => removeEventListener('hashchange', loadBuildFromUrlHash))
       <section class="planner-content">
         <PlannerTabs v-model:active-tab="activeTab" :selected-perk-count="prioritizedPerks.length" />
 
+        <section v-if="pointsLeft !== 0 || !build.bookStat || unfilledLevelCount" class="global-alerts" aria-label="Build notices">
+          <AlertMessage v-if="pointsLeft !== 0" type="error">Starting SPECIAL stats are not fully allocated.</AlertMessage>
+          <AlertMessage v-if="!build.bookStat" type="warning">You're SPECIAL book is not assigned to any stat.</AlertMessage>
+          <AlertMessage v-if="unfilledLevelCount" type="error">This route has {{ unfilledLevelCount }} unfilled level{{ unfilledLevelCount === 1 ? '' : 's' }}. Add more perk ranks or use those levels for SPECIAL increases.</AlertMessage>
+        </section>
+
         <CharacterRecordPanel v-if="activeTab === 'character'" :build="build" :name-is-voiced="nameIsVoiced" :points-left="pointsLeft" @continue="activeTab = 'perks'" @update-target-level="updateTargetLevel" @change-stat="changeStat" @set-stat="setStat" />
 
         <SpecialPerkPanel
@@ -346,8 +351,6 @@ onBeforeUnmount(() => removeEventListener('hashchange', loadBuildFromUrlHash))
           :prioritized-perks="prioritizedPerks"
           :bobblehead-requirements="bobbleheadRequirements"
           :book-requirements="bookRequirements"
-          :has-special-book="Boolean(build.bookStat)"
-          :unfilled-level-count="unfilledLevelCount"
           :plan="plan"
           :plan-error="planError"
           :dragged-id="draggedId"
@@ -362,6 +365,8 @@ onBeforeUnmount(() => removeEventListener('hashchange', loadBuildFromUrlHash))
           @drop-priority-at-end="dropPriorityAtEnd"
           @end-priority-drag="endPriorityDrag"
         />
+
+        <PlayerStatsPanel v-if="activeTab === 'stats'" :build="build" />
 
         <ConsoleCommandPanel
           v-if="activeTab === 'console'"

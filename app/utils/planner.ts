@@ -128,14 +128,18 @@ export function lateLevelsForPlanAction(action: PlanAction) {
   return Math.max(0, action.level - action.requiredLevel)
 }
 
+export function planActionHeading(action: PlanAction) {
+  if (action.type === 'book') return `Remember to pick your You're SPECIAL book`
+  if (action.type === 'bobblehead') return `Before level ${action.level}`
+  return `Level ${action.level}`
+}
+
 export function toMarkdown(build: Build, perks: Perk[]) {
   const plan = optimize(build, perks)
   const title = build.name || 'Fallout 4 build'
   const character = build.characterName ? ` for ${build.characterName}` : ''
   const special = stats.map((stat) => `- ${stat}: ${effectiveStat(build, stat)}${build.bobbleheads[stat] ? ' (bobblehead assumed)' : ''}`).join('\n')
-  const steps = plan.map((action) => action.type === 'bobblehead' || action.type === 'book'
-    ? `- **Before level ${action.level}:** ${action.label} - ${action.detail}`
-    : `- **Level ${action.level}:** ${action.label} - ${action.detail}`).join('\n')
+  const steps = plan.map((action) => `- **${planActionHeading(action)}:** ${action.label} - ${action.detail}`).join('\n')
   return `# ${title}${character}\n\n**Character:** ${build.gender}\n\n## Starting SPECIAL\n${special}\n\n**You're SPECIAL:** ${build.bookStat ? `+1 ${build.bookStat}` : 'Not assigned'}\n\n## Level-up guide\n${steps || '- No perks selected.'}\n`
 }
 

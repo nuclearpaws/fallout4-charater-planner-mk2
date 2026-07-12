@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { perks } from '../data/catalog'
 import { decodeBuildHash, encodeBuildHash } from '../utils/build-url'
 import { toConsoleCommands } from '../utils/console-commands'
-import { emptyBuild, effectiveStat, finalPlannedLevel, initialPointBudget, lateLevelsForPlanAction, optimize, spentPoints, toMarkdown } from '../utils/planner'
+import { emptyBuild, effectiveStat, finalPlannedLevel, initialPointBudget, lateLevelsForPlanAction, optimize, planActionHeading, spentPoints, toMarkdown } from '../utils/planner'
+import { buyPriceMultiplier, derivedPlayerStats, hitPointsAtLevel, sellPriceMultiplier, speechChance } from '../utils/player-stats'
 
 function perk(name: string) {
   const found = perks.find((item) => item.name === name)
@@ -60,6 +61,7 @@ describe('planner rules', () => {
 
     const route = optimize(build, perks)
     expect(route[0]).toMatchObject({ type: 'book', level: 1, label: `Get the You're SPECIAL book`, perkId: bigLeagues.id })
+    expect(planActionHeading(route[0])).toBe(`Remember to pick your You're SPECIAL book`)
     expect(route[1]).toMatchObject({ type: 'perk', level: 2, label: 'Big Leagues rank 1' })
   })
 
@@ -142,7 +144,7 @@ describe('planner rules', () => {
     build.selectedRanks[bigLeagues.id] = 1
     build.priority = [bigLeagues.id]
 
-    expect(toMarkdown(build, perks)).toContain(`**Before level 1:** Get the You're SPECIAL book`)
+    expect(toMarkdown(build, perks)).toContain(`**Remember to pick your You're SPECIAL book:** Get the You're SPECIAL book`)
   })
 
   it('continues scheduling another perk after a selected perk reaches its final rank', () => {
@@ -203,5 +205,40 @@ describe('planner rules', () => {
   it('ignores invalid build hashes', () => {
     expect(decodeBuildHash('#build=nope')).toBeNull()
     expect(decodeBuildHash('#tab=perks')).toBeNull()
+  })
+
+  it('calculates max hit points from level and Endurance', () => {
+    expect(hitPointsAtLevel(1, 1)).toBe(85)
+    expect(hitPointsAtLevel(10, 5)).toBe(150)
+  })
+
+  it('calculates persuasion chances from Charisma and check difficulty', () => {
+    expect(speechChance(1, 65)).toBe(0)
+    expect(speechChance(6, 50)).toBe(40)
+    expect(speechChance(10, 35)).toBe(100)
+  })
+
+  it('calculates barter price multipliers from Charisma', () => {
+    expect(buyPriceMultiplier(1)).toBeCloseTo(3.35)
+    expect(buyPriceMultiplier(10)).toBeCloseTo(2)
+    expect(sellPriceMultiplier(1)).toBeCloseTo(0.265)
+    expect(sellPriceMultiplier(10)).toBeCloseTo(0.4)
+  })
+
+  it('derives player stats from effective SPECIAL values', () => {
+    const build = emptyBuild()
+    build.targetLevel = 3
+    build.stats.Strength = 4
+    build.stats.Charisma = 6
+    build.stats.Agility = 7
+    build.bookStat = 'Charisma'
+
+    const derived = derivedPlayerStats(build)
+    expect(derived.carryWeight).toBe(240)
+    expect(derived.actionPoints).toBe(130)
+    expect(derived.maxSettlers).toBe(17)
+    expect(derived.buyPriceMultiplier).toBeCloseTo(2.45)
+    expect(derived.sellPriceMultiplier).toBeCloseTo(0.355)
+    expect(derived.hitPointsByLevel).toHaveLength(3)
   })
 })
