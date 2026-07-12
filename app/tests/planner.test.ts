@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { perks } from '../data/catalog'
+import { decodeBuildHash, encodeBuildHash } from '../utils/build-url'
+import { toConsoleCommands } from '../utils/console-commands'
 import { emptyBuild, effectiveStat, finalPlannedLevel, initialPointBudget, optimize, spentPoints, toMarkdown } from '../utils/planner'
 
 function perk(name: string) {
@@ -61,6 +63,22 @@ describe('planner rules', () => {
     expect(route[1]).toMatchObject({ type: 'perk', level: 1, label: 'Big Leagues rank 1' })
   })
 
+  it('attributes the book before the bobblehead when both raise the same stat', () => {
+    const build = emptyBuild()
+    const rooted = perk('Rooted')
+    const painTrain = perk('Pain Train')
+    build.stats.Strength = 8
+    build.bookStat = 'Strength'
+    build.bobbleheads.Strength = true
+    build.selectedRanks[rooted.id] = 1
+    build.selectedRanks[painTrain.id] = 1
+    build.priority = [rooted.id, painTrain.id]
+
+    const route = optimize(build, perks)
+    expect(route.find((action) => action.type === 'book')).toMatchObject({ level: 1, perkId: rooted.id })
+    expect(route.find((action) => action.type === 'bobblehead')).toMatchObject({ perkId: painTrain.id })
+  })
+
   it('raises SPECIAL before scheduling a selected perk that needs it', () => {
     const build = emptyBuild()
     const armorer = perk('Armorer')
@@ -81,6 +99,21 @@ describe('planner rules', () => {
 
     const rankTwo = optimize(build, perks).find((action) => action.label === 'Iron Fist rank 2')
     expect(rankTwo).toMatchObject({ level: 9, requiredLevel: 9, perkRank: 2 })
+    expect(optimize(build, perks).filter((action) => action.type === 'empty').map((action) => action.level)).toContain(2)
+  })
+
+  it('fills target levels without selected perks as unfilled route entries', () => {
+    const build = emptyBuild()
+    const bigLeagues = perk('Big Leagues')
+    build.targetLevel = 5
+    build.stats.Strength = 2
+    build.selectedRanks[bigLeagues.id] = 1
+    build.priority = [bigLeagues.id]
+
+    const route = optimize(build, perks)
+    expect(route).toContainEqual(expect.objectContaining({ type: 'perk', level: 1, label: 'Big Leagues rank 1' }))
+    expect(route.filter((action) => action.type === 'empty').map((action) => action.level)).toEqual([2, 3, 4, 5])
+    expect(finalPlannedLevel(build, perks)).toBe(1)
   })
 
   it('includes prerequisite guidance in Markdown exports', () => {
@@ -113,6 +146,52 @@ describe('planner rules', () => {
 
     const route = optimize(build, perks)
     expect(route).toContainEqual(expect.objectContaining({ label: 'Big Leagues rank 1' }))
-    expect(route.at(-1)).toMatchObject({ label: 'Iron Fist rank 5' })
+    expect(route.filter((action) => action.type !== 'empty').at(-1)).toMatchObject({ label: 'Iron Fist rank 5' })
+  })
+
+  it('exports console setup commands for level, final SPECIAL, and selected perk ranks', () => {
+    const build = emptyBuild()
+    const bigLeagues = perk('Big Leagues')
+    build.bookStat = 'Strength'
+    build.selectedRanks[bigLeagues.id] = 1
+    build.priority = [bigLeagues.id]
+
+    const preview = toConsoleCommands(build, perks)
+    expect(preview.commands).toContain('player.setlevel 60')
+    expect(preview.commands).toContain('player.setav strength 2')
+    expect(preview.commands).toContain('player.addperk 0004a0b5')
+  })
+
+  it('uses configured DLC load order for placeholder perk IDs', () => {
+    const build = emptyBuild()
+    const radResistant = perk('Rad Resistant')
+    build.stats.Endurance = 6
+    build.selectedRanks[radResistant.id] = 4
+    build.priority = [radResistant.id]
+
+    const preview = toConsoleCommands(build, perks, { 'Far Harbor': '03' })
+    expect(preview.commands).toContain('player.addperk 030423a4')
+    expect(preview.hasLoadOrderPlaceholders).toBe(false)
+  })
+
+  it('round-trips builds through a URL-safe hash', () => {
+    const build = emptyBuild()
+    const bigLeagues = perk('Big Leagues')
+    build.name = 'Melee & Luck'
+    build.characterName = 'Nora'
+    build.stats.Strength = 4
+    build.bookStat = 'Strength'
+    build.bobbleheads.Luck = true
+    build.selectedRanks[bigLeagues.id] = 1
+    build.priority = [bigLeagues.id]
+
+    const hash = encodeBuildHash(build)
+    expect(hash).toMatch(/^build=[A-Za-z0-9_-]+$/)
+    expect(decodeBuildHash(`#${hash}`)).toEqual(build)
+  })
+
+  it('ignores invalid build hashes', () => {
+    expect(decodeBuildHash('#build=nope')).toBeNull()
+    expect(decodeBuildHash('#tab=perks')).toBeNull()
   })
 })

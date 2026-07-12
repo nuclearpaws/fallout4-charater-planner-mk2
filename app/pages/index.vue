@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import BuildPlanPanel from '~/components/build-plan/BuildPlanPanel.vue'
 import CharacterRecordPanel from '~/components/character/CharacterRecordPanel.vue'
+import ConsoleCommandPanel from '~/components/console/ConsoleCommandPanel.vue'
 import BuildSaveRail from '~/components/planner/BuildSaveRail.vue'
 import ConfirmBuildActionDialog from '~/components/planner/ConfirmBuildActionDialog.vue'
 import PlannerTabs from '~/components/planner/PlannerTabs.vue'
 import SpecialPerkPanel from '~/components/special/SpecialPerkPanel.vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useBuildExport } from '~/composables/useBuildExport'
 import { useSavedBuilds } from '~/composables/useSavedBuilds'
-import { perks, voicedNames, type Perk, type Stat } from '~/data/catalog'
+import { dlcs, perks, voicedNames, type Perk, type Stat } from '~/data/catalog'
+import { decodeBuildHash, encodeBuildHash } from '~/utils/build-url'
+import { toConsoleCommands } from '~/utils/console-commands'
 import { emptyBuild, finalPlannedLevel, initialPointBudget, normalizePriority, optimize, spentPoints, visiblePerks, type Build } from '~/utils/planner'
 import { cloneBuild } from '~/utils/build-validation'
 
@@ -21,15 +24,18 @@ const dragOverId = ref<string | null>(null)
 const dragOverEnd = ref(false)
 const selectionStatus = ref('')
 const expandedPerkId = ref<string | null>(null)
-const activeTab = ref<'character' | 'perks' | 'plan'>('character')
+const activeTab = ref<'character' | 'perks' | 'plan' | 'console'>('character')
+const dlcLoadOrder = ref(Object.fromEntries(dlcs.map((dlc) => [dlc.name, dlc.id])) as Record<string, string>)
 const pendingAction = ref<PendingAction | null>(null)
 const confirmationKind = ref<'unsaved' | 'delete' | null>(null)
 
 const {
   savedBuilds,
   selectedSavedId,
+  activeSavedBuildId,
   activeSavedBuild,
   saveStatus,
+  savedSnapshot,
   isDirty,
   saveBuild,
   loadBuild,
@@ -65,6 +71,14 @@ const planError = computed(() => planResult.value.error)
 const plannedFinalLevel = computed(() => plan.value.at(-1)?.level ?? 1)
 const bobbleheadRequirements = computed(() => new Set(plan.value.filter((item) => item.type === 'bobblehead').flatMap((item) => item.perkId ? [item.perkId] : [])))
 const bookRequirements = computed(() => new Set(plan.value.filter((item) => item.type === 'book').flatMap((item) => item.perkId ? [item.perkId] : [])))
+const unfilledLevelCount = computed(() => plan.value.filter((item) => item.type === 'empty').length)
+const consoleCommandPreview = computed(() => {
+  try {
+    return { ...toConsoleCommands(build.value, perks, dlcLoadOrder.value), error: '' }
+  } catch {
+    return { commands: '', hasLoadOrderPlaceholders: false, error: 'Console commands could not be generated for this build.' }
+  }
+})
 const pendingDeleteBuild = computed(() => {
   const action = pendingAction.value
   return action?.type === 'delete' ? savedBuilds.value.find((item) => item.id === action.id) ?? null : null
@@ -79,6 +93,27 @@ function changeStat(stat: Stat, direction: number, event?: MouseEvent) {
   if (direction > 0 && (value >= 10 || pointsLeft.value <= 0)) return
   if (direction < 0 && value <= 1) return
   build.value.stats[stat] += direction
+}
+
+function updateDlcLoadOrder(dlc: string, value: string) {
+  dlcLoadOrder.value = { ...dlcLoadOrder.value, [dlc]: value.trim().slice(0, 2) }
+}
+
+function loadBuildFromUrlHash() {
+  const urlBuild = decodeBuildHash(location.hash)
+  if (!urlBuild) return false
+  build.value = urlBuild
+  activeSavedBuildId.value = null
+  selectedSavedId.value = ''
+  savedSnapshot.value = ''
+  saveStatus.value = { message: 'Loaded build from URL.', error: false }
+  return true
+}
+
+function syncBuildToUrlHash() {
+  const nextHash = encodeBuildHash(build.value)
+  if (location.hash.slice(1) === nextHash) return
+  history.replaceState(null, '', `${location.pathname}${location.search}#${nextHash}`)
 }
 
 function setStat(stat: Stat, event: Event) {
@@ -247,6 +282,16 @@ watch(() => build.value.gender, (gender) => {
   }
   if (expandedPerkId.value && !visiblePerks(perks, gender).some((perk) => perk.id === expandedPerkId.value)) expandedPerkId.value = null
 })
+
+watch(build, syncBuildToUrlHash, { deep: true })
+
+onMounted(() => {
+  loadBuildFromUrlHash()
+  syncBuildToUrlHash()
+  addEventListener('hashchange', loadBuildFromUrlHash)
+})
+
+onBeforeUnmount(() => removeEventListener('hashchange', loadBuildFromUrlHash))
 </script>
 
 <template>
@@ -300,6 +345,7 @@ watch(() => build.value.gender, (gender) => {
           :bobblehead-requirements="bobbleheadRequirements"
           :book-requirements="bookRequirements"
           :has-special-book="Boolean(build.bookStat)"
+          :unfilled-level-count="unfilledLevelCount"
           :plan="plan"
           :plan-error="planError"
           :dragged-id="draggedId"
@@ -313,6 +359,16 @@ watch(() => build.value.gender, (gender) => {
           @drop-priority="dropPriority"
           @drop-priority-at-end="dropPriorityAtEnd"
           @end-priority-drag="endPriorityDrag"
+        />
+
+        <ConsoleCommandPanel
+          v-if="activeTab === 'console'"
+          :commands="consoleCommandPreview.commands"
+          :error="consoleCommandPreview.error"
+          :has-load-order-placeholders="consoleCommandPreview.hasLoadOrderPlaceholders"
+          :dlcs="dlcs"
+          :load-order="dlcLoadOrder"
+          @update-load-order="updateDlcLoadOrder"
         />
       </section>
     </div>

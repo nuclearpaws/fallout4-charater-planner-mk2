@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { stats, type Stat } from '~/data/catalog'
+import { ref } from 'vue'
+import InfoDialog from '~/components/ui/InfoDialog.vue'
+import { specialStatDescriptions, stats, type Stat } from '~/data/catalog'
 import type { Build } from '~/utils/planner'
 
 defineProps<{ build: Build; nameIsVoiced: boolean; pointsLeft: number }>()
 const emit = defineEmits<{ continue: []; updateTargetLevel: [event: Event]; changeStat: [stat: Stat, direction: number, event: MouseEvent]; setStat: [stat: Stat, event: Event] }>()
+const infoStat = ref<Stat | null>(null)
 </script>
 
 <template>
@@ -34,7 +37,7 @@ const emit = defineEmits<{ continue: []; updateTargetLevel: [event: Event]; chan
       </div>
       <div class="special-registration-list">
         <div v-for="stat in stats" :key="stat" class="special-registration-row">
-          <span class="special-stat-name">{{ stat }}</span>
+          <span class="special-stat-name">{{ stat }}<button class="info-button" :aria-label="`Show ${stat} details`" @click="infoStat = stat">i</button></span>
           <span class="special-pips" :aria-label="`${build.stats[stat]} out of 10 ${stat}`">
             <i v-for="pip in 10" :key="pip" :class="{ filled: pip <= build.stats[stat] }" aria-hidden="true"></i>
           </span>
@@ -46,5 +49,8 @@ const emit = defineEmits<{ continue: []; updateTargetLevel: [event: Event]; chan
         </div>
       </div>
     </section>
+    <InfoDialog v-if="infoStat" :title="infoStat" subtitle="SPECIAL stat" @close="infoStat = null">
+      <p>{{ specialStatDescriptions[infoStat] }}</p>
+    </InfoDialog>
   </section>
 </template>

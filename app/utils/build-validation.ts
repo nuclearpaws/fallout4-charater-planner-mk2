@@ -1,6 +1,6 @@
-import { perks, stats } from '~/data/catalog'
-import type { Gender, Perk } from '~/data/catalog'
-import { emptyBuild, type Build } from '~/utils/planner'
+import { perks, stats } from '../data/catalog'
+import type { Gender, Perk } from '../data/catalog'
+import { emptyBuild, type Build } from './planner'
 
 export interface SavedBuild { id: string; createdAt: string; updatedAt: string; build: Build }
 export interface LegacySavedBuild { id: string; savedAt?: string; createdAt?: string; updatedAt?: string; build: Build }

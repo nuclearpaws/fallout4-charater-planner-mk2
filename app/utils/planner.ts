@@ -16,7 +16,7 @@ export interface Build {
 
 export interface PlanAction {
   level: number
-  type: 'perk' | 'stat' | 'bobblehead' | 'book'
+  type: 'perk' | 'stat' | 'bobblehead' | 'book' | 'empty'
   label: string
   detail: string
   perkId?: string
@@ -92,16 +92,16 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
 
     const ready = pending.find(({ rank }) => rank.level <= level)
     if (!ready) {
+      actions.push({ level, type: 'empty', label: 'Unfilled level', detail: 'No selected perk rank is available at this level.' })
       level++
       continue
     }
 
     const stat = ready.perk.stat.name
     const baseWithRaised = build.stats[stat] + (raised[stat] ?? 0)
-    const withoutBook = baseWithRaised + Number(build.bobbleheads[stat])
-    if (build.bookStat === stat && withoutBook < ready.perk.stat.value && !announcedBooks.has(stat)) {
+    if (build.bookStat === stat && baseWithRaised < ready.perk.stat.value && !announcedBooks.has(stat)) {
       announcedBooks.add(stat)
-      actions.push({ level, type: 'book', label: `Get the You're SPECIAL book`, detail: `Assign it to ${stat} before ${ready.perk.name} rank ${ready.rank.rank}.`, perkId: ready.perk.id })
+      actions.unshift({ level: 1, type: 'book', label: `Get the You're SPECIAL book`, detail: `Assign it to ${stat} before ${ready.perk.name} rank ${ready.rank.rank}.`, perkId: ready.perk.id })
     }
     const withoutBobblehead = baseWithRaised + Number(build.bookStat === stat)
     if (build.bobbleheads[stat] && withoutBobblehead < ready.perk.stat.value && !announcedBobbleheads.has(stat)) {
@@ -112,11 +112,15 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
     actions.push({ level, type: 'perk', label: `${ready.perk.name} rank ${ready.rank.rank}`, detail: ready.rank.description, perkId: ready.perk.id, requiredLevel: ready.rank.level, perkRank: ready.rank.rank })
     level++
   }
+  while (level <= build.targetLevel) {
+    actions.push({ level, type: 'empty', label: 'Unfilled level', detail: 'Add another perk rank or plan a SPECIAL increase for this level.' })
+    level++
+  }
   return actions
 }
 
 export function finalPlannedLevel(build: Build, perks: Perk[]) {
-  return optimize(build, perks).at(-1)?.level ?? 1
+  return optimize(build, perks).filter((action) => action.type !== 'empty').at(-1)?.level ?? 1
 }
 
 export function toMarkdown(build: Build, perks: Perk[]) {
