@@ -68,7 +68,8 @@ const planResult = computed(() => {
 })
 const plan = computed(() => planResult.value.actions)
 const planError = computed(() => planResult.value.error)
-const plannedFinalLevel = computed(() => plan.value.at(-1)?.level ?? 1)
+const plannedLevelUpCount = computed(() => Object.values(build.value.selectedRanks).reduce((total, rank) => total + rank, 0) + plan.value.filter((item) => item.type === 'stat').length)
+const availableLevelUpCount = computed(() => Math.max(0, build.value.targetLevel - 1))
 const bobbleheadRequirements = computed(() => new Set(plan.value.filter((item) => item.type === 'bobblehead').flatMap((item) => item.perkId ? [item.perkId] : [])))
 const bookRequirements = computed(() => new Set(plan.value.filter((item) => item.type === 'book').flatMap((item) => item.perkId ? [item.perkId] : [])))
 const unfilledLevelCount = computed(() => plan.value.filter((item) => item.type === 'empty').length)
@@ -331,7 +332,8 @@ onBeforeUnmount(() => removeEventListener('hashchange', loadBuildFromUrlHash))
           :chart-perks="chartPerks"
           :expansion-perks="expansionPerks"
           :points-left="pointsLeft"
-          :planned-final-level="plannedFinalLevel"
+          :planned-final-level="plannedLevelUpCount"
+          :available-level-ups="availableLevelUpCount"
           :selected-perk-count="prioritizedPerks.length"
           :selection-status="selectionStatus"
           @change-stat="changeStat"

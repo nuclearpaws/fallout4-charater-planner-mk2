@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { perks } from '../data/catalog'
 import { decodeBuildHash, encodeBuildHash } from '../utils/build-url'
 import { toConsoleCommands } from '../utils/console-commands'
-import { emptyBuild, effectiveStat, finalPlannedLevel, initialPointBudget, optimize, spentPoints, toMarkdown } from '../utils/planner'
+import { emptyBuild, effectiveStat, finalPlannedLevel, initialPointBudget, lateLevelsForPlanAction, optimize, spentPoints, toMarkdown } from '../utils/planner'
 
 function perk(name: string) {
   const found = perks.find((item) => item.name === name)
@@ -34,8 +34,8 @@ describe('planner rules', () => {
     build.selectedRanks[bigLeagues.id] = 1
     build.priority = [bigLeagues.id]
     const route = optimize(build, perks)
-    expect(route[0]).toMatchObject({ type: 'bobblehead', level: 1, label: 'Collect the Strength Bobblehead' })
-    expect(route[1]).toMatchObject({ type: 'perk', level: 1, label: 'Big Leagues rank 1' })
+    expect(route[0]).toMatchObject({ type: 'bobblehead', level: 2, label: 'Collect the Strength Bobblehead' })
+    expect(route[1]).toMatchObject({ type: 'perk', level: 2, label: 'Big Leagues rank 1' })
   })
 
   it('associates a bobblehead prerequisite with only the perk that needs it', () => {
@@ -60,7 +60,7 @@ describe('planner rules', () => {
 
     const route = optimize(build, perks)
     expect(route[0]).toMatchObject({ type: 'book', level: 1, label: `Get the You're SPECIAL book`, perkId: bigLeagues.id })
-    expect(route[1]).toMatchObject({ type: 'perk', level: 1, label: 'Big Leagues rank 1' })
+    expect(route[1]).toMatchObject({ type: 'perk', level: 2, label: 'Big Leagues rank 1' })
   })
 
   it('attributes the book before the bobblehead when both raise the same stat', () => {
@@ -85,10 +85,10 @@ describe('planner rules', () => {
     build.selectedRanks[armorer.id] = 1
     build.priority = [armorer.id]
     const route = optimize(build, perks)
-    expect(route[0]).toMatchObject({ type: 'stat', level: 1, label: 'Raise Strength to 2' })
-    expect(route[1]).toMatchObject({ type: 'stat', level: 2, label: 'Raise Strength to 3' })
-    expect(route[2]).toMatchObject({ type: 'perk', level: 3, label: 'Armorer rank 1' })
-    expect(finalPlannedLevel(build, perks)).toBe(3)
+    expect(route[0]).toMatchObject({ type: 'stat', level: 2, label: 'Raise Strength to 2' })
+    expect(route[1]).toMatchObject({ type: 'stat', level: 3, label: 'Raise Strength to 3' })
+    expect(route[2]).toMatchObject({ type: 'perk', level: 4, label: 'Armorer rank 1' })
+    expect(finalPlannedLevel(build, perks)).toBe(4)
   })
 
   it('includes each perk rank minimum level in the generated route', () => {
@@ -99,7 +99,7 @@ describe('planner rules', () => {
 
     const rankTwo = optimize(build, perks).find((action) => action.label === 'Iron Fist rank 2')
     expect(rankTwo).toMatchObject({ level: 9, requiredLevel: 9, perkRank: 2 })
-    expect(optimize(build, perks).filter((action) => action.type === 'empty').map((action) => action.level)).toContain(2)
+    expect(optimize(build, perks).filter((action) => action.type === 'empty').map((action) => action.level)).toContain(3)
   })
 
   it('fills target levels without selected perks as unfilled route entries', () => {
@@ -111,9 +111,19 @@ describe('planner rules', () => {
     build.priority = [bigLeagues.id]
 
     const route = optimize(build, perks)
-    expect(route).toContainEqual(expect.objectContaining({ type: 'perk', level: 1, label: 'Big Leagues rank 1' }))
-    expect(route.filter((action) => action.type === 'empty').map((action) => action.level)).toEqual([2, 3, 4, 5])
-    expect(finalPlannedLevel(build, perks)).toBe(1)
+    expect(route).toContainEqual(expect.objectContaining({ type: 'perk', level: 2, label: 'Big Leagues rank 1' }))
+    expect(route.filter((action) => action.type === 'empty').map((action) => action.level)).toEqual([3, 4, 5])
+    expect(finalPlannedLevel(build, perks)).toBe(2)
+  })
+
+  it('does not count delayed rank 1 perk takes as late levels', () => {
+    const action = { level: 20, type: 'perk', label: 'Test rank 1', detail: 'Delayed by priority.', requiredLevel: 8, perkRank: 1 } as const
+    expect(lateLevelsForPlanAction(action)).toBe(0)
+  })
+
+  it('counts delayed rank 2 and higher perk takes as late levels', () => {
+    const action = { level: 20, type: 'perk', label: 'Test rank 2', detail: 'Delayed by priority.', requiredLevel: 8, perkRank: 2 } as const
+    expect(lateLevelsForPlanAction(action)).toBe(12)
   })
 
   it('includes prerequisite guidance in Markdown exports', () => {
@@ -122,7 +132,7 @@ describe('planner rules', () => {
     build.bobbleheads.Strength = true
     build.selectedRanks[bigLeagues.id] = 1
     build.priority = [bigLeagues.id]
-    expect(toMarkdown(build, perks)).toContain('**Before level 1:** Collect the Strength Bobblehead')
+    expect(toMarkdown(build, perks)).toContain('**Before level 2:** Collect the Strength Bobblehead')
   })
 
   it('includes SPECIAL book prerequisite guidance in Markdown exports', () => {

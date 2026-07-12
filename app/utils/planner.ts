@@ -69,7 +69,7 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
   const announcedBobbleheads = new Set<Stat>()
   const announcedBooks = new Set<Stat>()
   const actions: PlanAction[] = []
-  let level = 1
+  let level = 2
 
   while (Object.entries(build.selectedRanks).some(([id, target]) => (progress[id] ?? 0) < target && byId.has(id))) {
     const pending = priority.flatMap((id) => {
@@ -121,6 +121,11 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
 
 export function finalPlannedLevel(build: Build, perks: Perk[]) {
   return optimize(build, perks).filter((action) => action.type !== 'empty').at(-1)?.level ?? 1
+}
+
+export function lateLevelsForPlanAction(action: PlanAction) {
+  if (action.type !== 'perk' || !action.requiredLevel || action.perkRank === 1) return 0
+  return Math.max(0, action.level - action.requiredLevel)
 }
 
 export function toMarkdown(build: Build, perks: Perk[]) {
