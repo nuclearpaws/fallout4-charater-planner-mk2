@@ -49,6 +49,18 @@ describe('planner rules', () => {
     expect(bobbleheadAction).toMatchObject({ perkId: bigLeagues.id })
   })
 
+  it('announces the SPECIAL book before the first perk rank that depends on it', () => {
+    const build = emptyBuild()
+    const bigLeagues = perk('Big Leagues')
+    build.bookStat = 'Strength'
+    build.selectedRanks[bigLeagues.id] = 1
+    build.priority = [bigLeagues.id]
+
+    const route = optimize(build, perks)
+    expect(route[0]).toMatchObject({ type: 'book', level: 1, label: `Get the You're SPECIAL book`, perkId: bigLeagues.id })
+    expect(route[1]).toMatchObject({ type: 'perk', level: 1, label: 'Big Leagues rank 1' })
+  })
+
   it('raises SPECIAL before scheduling a selected perk that needs it', () => {
     const build = emptyBuild()
     const armorer = perk('Armorer')
@@ -78,6 +90,16 @@ describe('planner rules', () => {
     build.selectedRanks[bigLeagues.id] = 1
     build.priority = [bigLeagues.id]
     expect(toMarkdown(build, perks)).toContain('**Before level 1:** Collect the Strength Bobblehead')
+  })
+
+  it('includes SPECIAL book prerequisite guidance in Markdown exports', () => {
+    const build = emptyBuild()
+    const bigLeagues = perk('Big Leagues')
+    build.bookStat = 'Strength'
+    build.selectedRanks[bigLeagues.id] = 1
+    build.priority = [bigLeagues.id]
+
+    expect(toMarkdown(build, perks)).toContain(`**Before level 1:** Get the You're SPECIAL book`)
   })
 
   it('continues scheduling another perk after a selected perk reaches its final rank', () => {

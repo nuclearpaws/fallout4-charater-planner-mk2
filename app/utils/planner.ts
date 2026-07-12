@@ -16,7 +16,7 @@ export interface Build {
 
 export interface PlanAction {
   level: number
-  type: 'perk' | 'stat' | 'bobblehead'
+  type: 'perk' | 'stat' | 'bobblehead' | 'book'
   label: string
   detail: string
   perkId?: string
@@ -67,6 +67,7 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
   const progress: Record<string, number> = {}
   const raised: Partial<Record<Stat, number>> = {}
   const announcedBobbleheads = new Set<Stat>()
+  const announcedBooks = new Set<Stat>()
   const actions: PlanAction[] = []
   let level = 1
 
@@ -96,7 +97,13 @@ export function optimize(build: Build, perks: Perk[]): PlanAction[] {
     }
 
     const stat = ready.perk.stat.name
-    const withoutBobblehead = build.stats[stat] + (raised[stat] ?? 0) + Number(build.bookStat === stat)
+    const baseWithRaised = build.stats[stat] + (raised[stat] ?? 0)
+    const withoutBook = baseWithRaised + Number(build.bobbleheads[stat])
+    if (build.bookStat === stat && withoutBook < ready.perk.stat.value && !announcedBooks.has(stat)) {
+      announcedBooks.add(stat)
+      actions.push({ level, type: 'book', label: `Get the You're SPECIAL book`, detail: `Assign it to ${stat} before ${ready.perk.name} rank ${ready.rank.rank}.`, perkId: ready.perk.id })
+    }
+    const withoutBobblehead = baseWithRaised + Number(build.bookStat === stat)
     if (build.bobbleheads[stat] && withoutBobblehead < ready.perk.stat.value && !announcedBobbleheads.has(stat)) {
       announcedBobbleheads.add(stat)
       actions.push({ level, type: 'bobblehead', label: `Collect the ${stat} Bobblehead`, detail: `Required before ${ready.perk.name} rank ${ready.rank.rank}.`, perkId: ready.perk.id })
@@ -117,7 +124,7 @@ export function toMarkdown(build: Build, perks: Perk[]) {
   const title = build.name || 'Fallout 4 build'
   const character = build.characterName ? ` for ${build.characterName}` : ''
   const special = stats.map((stat) => `- ${stat}: ${effectiveStat(build, stat)}${build.bobbleheads[stat] ? ' (bobblehead assumed)' : ''}`).join('\n')
-  const steps = plan.map((action) => action.type === 'bobblehead'
+  const steps = plan.map((action) => action.type === 'bobblehead' || action.type === 'book'
     ? `- **Before level ${action.level}:** ${action.label} - ${action.detail}`
     : `- **Level ${action.level}:** ${action.label} - ${action.detail}`).join('\n')
   return `# ${title}${character}\n\n**Character:** ${build.gender}\n\n## Starting SPECIAL\n${special}\n\n**You're SPECIAL:** ${build.bookStat ? `+1 ${build.bookStat}` : 'Not assigned'}\n\n## Level-up guide\n${steps || '- No perks selected.'}\n`
